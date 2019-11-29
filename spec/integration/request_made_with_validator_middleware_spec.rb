@@ -1,23 +1,6 @@
-require "spec_helper"
-require "sinatra/base"
-require "sinatra/cookies"
+require 'spec_helper'
 
-class FakeApp < Sinatra::Base
-  use Rack::Anchor::Middleware
-
-  get '/' do
-    'fake endpoint'
-  end
-end
-
-RSpec.describe Rack::Anchor do
-  include Rack::Test::Methods
-
-  def app
-    app = FakeApp.new
-    Rack::Builder.new.run(app)
-  end
-
+RSpec.describe 'Request made with Validator middleware' do
   it 'has a version number' do
     expect(Rack::Anchor::VERSION).not_to be nil
   end
@@ -30,8 +13,8 @@ RSpec.describe Rack::Anchor do
   end
 
   context 'when request contains malicious characters' do
-    context 'for Cookies' do
-      it 'responds with a 400 Bad Request' do
+    context 'for invalid Cookies' do
+      it 'responds with 400 Bad Request' do
         set_cookie 'my_session=abcde%00'
 
         get '/'
@@ -40,14 +23,29 @@ RSpec.describe Rack::Anchor do
         expect(last_response.body).to eq 'Bad Request'
       end
     end
+
+    context 'for invalid params' do
+      it 'responds with 400 Bad Request' do
+        ascii8bit = "\xBF"
+
+        get '/', name: [
+          {
+            inner_key: "I am #{ascii8bit} bad"
+          }
+        ]
+
+        expect(last_response.bad_request?).to eq true
+        expect(last_response.body).to eq 'Bad Request'
+      end
+    end
   end
 
   context 'when request contains valid characters' do
-    context 'for Cookies' do
+    context 'for a valid request' do
       it 'responds with a 200' do
         set_cookie 'my_session=abcdefg'
 
-        get '/'
+        get '/', name: 'Mr. Safety Pants'
 
         expect(last_response.ok?).to be true
       end
